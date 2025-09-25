@@ -3,12 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>進階訂單管理系統</title>
+    <title>單一密碼訂單管理系統</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Chosen Palette: Warm Neutrals -->
-    <!-- Application Structure Plan: 採用單頁應用程式(SPA)設計，並將資料儲存方式從本地localStorage升級為雲端Firestore資料庫。此版本仍包含三個主要區塊：「新增訂單」、「商品管理」和「所有訂單」，並透過頂部導覽按鈕切換。核心改變在於所有資料操作（新增、編輯、刪除）都將即時同步到雲端，實現資料的永久保存和跨裝置存取。頁面上會顯示使用者的專屬ID，以便未來進行資料分享與協作。此架構確保了應用程式的穩定性與可擴展性。 -->
-    <!-- Visualization & Content Choices: Report Info -> 核心目標從單機資料輸入升級為雲端資料管理與即時同步。Goal -> 組織/持久化/協作。Viz/Presentation Method -> 沿用由 JavaScript 驅動的互動式 HTML 表單與表格，但背後資料來源切換至Firestore。Interaction -> 使用者操作將觸發對Firestore資料庫的讀寫，而onSnapshot監聽器會即時更新UI，實現資料同步。Justification -> 這種即時資料流能提供無縫的用戶體驗，並為多人協作奠定基礎。Library/Method -> Vanilla JavaScript, Tailwind CSS, Firebase SDK (Firestore & Auth)。 -->
-    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
     <style>
         body { background-color: #FDFBF7; font-family: 'Inter', 'Noto Sans TC', sans-serif; }
         .tab-button { transition: all 0.3s ease; }
@@ -18,7 +14,7 @@
         .section.active { display: block; }
         .btn-primary { background-color: #A4907C; color: white; transition: background-color 0.3s; }
         .btn-primary:hover { background-color: #8D7B68; }
-        .btn-secondary { background-color: #C8B6A6; color: #424242; transition: background-color: 0.3s; }
+        .btn-secondary { background-color: #C8B6A6; color: #424242; transition: background-color 0.3s; }
         .btn-secondary:hover { background-color: #A4907C; }
         .btn-danger { background-color: #ef4444; color: white; transition: background-color 0.3s; }
         .btn-danger:hover { background-color: #dc2626; }
@@ -53,16 +49,32 @@
 </head>
 <body class="antialiased text-gray-800">
 
-    <div id="loading-overlay" class="loading-overlay">
+    <div id="loading-overlay" class="loading-overlay" style="display:none;">
         <div class="spinner"></div>
     </div>
 
-    <div class="container mx-auto p-4 md:p-8 max-w-7xl">
+    <!-- Auth Modal -->
+    <div id="auth-modal" class="modal-backdrop">
+        <div class="modal-content p-6">
+            <h3 class="text-2xl font-bold mb-4 text-center text-[#8D7B68]">輸入密碼</h3>
+            <div id="auth-error-message" class="text-red-500 text-sm mb-4 text-center" style="display:none;"></div>
+            <form id="auth-form">
+                <div class="mb-6">
+                    <label for="auth-password" class="block text-md font-medium text-gray-700 mb-1">密碼</label>
+                    <input type="password" id="auth-password" class="w-full p-2 border border-gray-300 rounded-md" required>
+                </div>
+                <button type="submit" id="auth-login-btn" class="btn-primary w-full py-3 rounded-md font-semibold text-lg">登入</button>
+            </form>
+        </div>
+    </div>
 
-        <header class="mb-8">
-            <h1 class="text-4xl font-bold text-[#655A4F] mb-2">進階訂單管理系統</h1>
-            <p class="text-lg text-gray-500 mb-2">一個簡化您訂單處理流程的雲端工具。</p>
-            <p class="text-sm text-gray-500">您的專屬使用者ID: <span id="user-id" class="font-mono font-bold text-[#8D7B68] break-all"></span></p>
+    <div id="app-container" class="container mx-auto p-4 md:p-8 max-w-7xl" style="display:none;">
+        <header class="mb-8 flex justify-between items-center">
+            <div>
+                <h1 class="text-4xl font-bold text-[#655A4F] mb-2">共享訂單管理系統</h1>
+                <p class="text-lg text-gray-500">所有團隊成員都可以共用的訂單系統。</p>
+            </div>
+            <button id="logout-btn" class="btn-secondary py-2 px-4 rounded-md font-semibold">登出</button>
         </header>
 
         <nav class="flex space-x-2 border-b-2 border-gray-200 mb-8">
@@ -157,17 +169,17 @@
                 </div>
             </section>
 
-            <!-- Section 3: All Orders -->
+            <!-- Section 3: Orders -->
             <section id="section-orders" class="section">
                 <div class="bg-white p-6 rounded-lg shadow-sm">
                     <h2 class="text-2xl font-bold mb-4 text-[#8D7B68]">所有訂單紀錄</h2>
+                    <p class="text-gray-500 mb-4">這些訂單所有登入的使用者都可以查看、新增或刪除。</p>
                     <div class="overflow-x-auto">
                         <table class="min-w-full bg-white">
                             <thead class="bg-[#EFEBE5]">
                                 <tr>
                                     <th class="py-3 px-4 text-left text-sm font-semibold text-gray-600 uppercase">訂單日期</th>
                                     <th class="py-3 px-4 text-left text-sm font-semibold text-gray-600 uppercase">姓名</th>
-                                    <th class="py-3 px-4 text-left text-sm font-semibold text-gray-600 uppercase">電話</th>
                                     <th class="py-3 px-4 text-left text-sm font-semibold text-gray-600 uppercase">商品</th>
                                     <th class="py-3 px-4 text-left text-sm font-semibold text-gray-600 uppercase">總金額</th>
                                     <th class="py-3 px-4 text-center text-sm font-semibold text-gray-600 uppercase">操作</th>
@@ -230,48 +242,43 @@
         <p id="toast-message"></p>
     </div>
 
-<script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, addDoc, setDoc, deleteDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-    import { setLogLevel } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
+<script>
+    const SHARED_PASSWORD = 'alexyu1018'; 
 
-    setLogLevel('debug');
+    let orders = [];
+    let products = [];
+    let currentOrderItems = [];
+    
+    // Auth elements
+    const authModal = document.getElementById('auth-modal');
+    const authForm = document.getElementById('auth-form');
+    const authPasswordInput = document.getElementById('auth-password');
+    const authErrorMessage = document.getElementById('auth-error-message');
+    const appContainer = document.getElementById('app-container');
+    const logoutBtn = document.getElementById('logout-btn');
 
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-    const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-    const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : '';
-    
-    let db;
-    let auth;
-    let userId;
-    let productsRef;
-    let ordersRef;
-    
+    // Tab and section elements
     const tabs = [
         { button: document.getElementById('tab-new-order'), section: document.getElementById('section-new-order') },
         { button: document.getElementById('tab-products'), section: document.getElementById('section-products') },
-        { button: document.getElementById('tab-orders'), section: document.getElementById('section-orders') }
+        { button: document.getElementById('tab-orders'), section: document.getElementById('section-orders') },
     ];
 
+    // Main app elements
     const rawOrderInput = document.getElementById('raw-order-input');
     const parseOrderBtn = document.getElementById('parse-order-btn');
-    
     const orderForm = document.getElementById('order-form');
     const customerName = document.getElementById('customer-name');
     const customerPhone = document.getElementById('customer-phone');
     const shippingMethod = document.getElementById('shipping-method');
     const orderItemsList = document.getElementById('order-items-list');
-
     const subtotalAmountEl = document.getElementById('subtotal-amount');
     const shippingFeeEl = document.getElementById('shipping-fee');
     const totalAmountEl = document.getElementById('total-amount');
-
     const saveOrderBtn = document.getElementById('save-order-btn');
     const clearFormBtn = document.getElementById('clear-form-btn');
     const ordersTableBody = document.getElementById('orders-table-body');
     const productsTableBody = document.getElementById('products-table-body');
-    
     const productModal = document.getElementById('product-modal');
     const productModalTitle = document.getElementById('product-modal-title');
     const productForm = document.getElementById('product-form');
@@ -283,24 +290,17 @@
     const showAddProductModalBtn = document.getElementById('show-add-product-modal-btn');
     const cancelProductBtn = document.getElementById('cancel-product-btn');
     const saveProductBtn = document.getElementById('save-product-btn');
-    const userIdEl = document.getElementById('user-id');
     const loadingOverlay = document.getElementById('loading-overlay');
-    
     const messageBox = document.getElementById('message-box');
     const messageText = document.getElementById('message-text');
     const messageConfirmBtn = document.getElementById('message-confirm-btn');
     const messageCancelBtn = document.getElementById('message-cancel-btn');
-
     const toast = document.getElementById('toast');
     const toastMessage = document.getElementById('toast-message');
-
     const productRawInput = document.getElementById('product-raw-input');
     const parseProductBtn = document.getElementById('parse-product-btn');
 
-    let products = [];
-    let orders = [];
-    let currentOrderItems = [];
-    
+    // Utility functions for UI
     const showMessage = (message, isConfirm = false) => {
         messageText.textContent = message;
         messageCancelBtn.style.display = isConfirm ? 'inline-block' : 'none';
@@ -424,14 +424,12 @@
         }
         
         currentOrderItems = [];
-        // Iterate through all known products to find matches in the pasted text
         products.forEach(product => {
             const regex = new RegExp(`(?:${product.name})(?:\\s*\\*\\s*|\\s+)?(\\d+)?`, 'g');
             let match;
             while ((match = regex.exec(text)) !== null) {
                 const quantity = match[1] ? parseInt(match[1]) : 1;
-                
-                const existingItem = currentOrderItems.find(item => item.docId === product.docId);
+                const existingItem = currentOrderItems.find(item => item.id === product.id);
                 if (existingItem) {
                     existingItem.quantity += quantity;
                 } else {
@@ -464,44 +462,38 @@
         if(shippingMethod.value === '711') shippingFee = 39;
         if(shippingMethod.value === 'familymart') shippingFee = 38;
         const total = subtotal + shippingFee;
-
+        
         const newOrder = {
+            id: Date.now(), // Generate unique ID
             date: new Date().toLocaleDateString(),
             name: customerName.value,
             phone: customerPhone.value,
             items: currentOrderItems,
             total: total,
-            createdAt: new Date()
+            createdAt: new Date().toISOString()
         };
         
-        try {
-            loadingOverlay.style.display = 'flex';
-            await addDoc(ordersRef, newOrder);
-            showToast('訂單已成功儲存！');
-            clearForm();
-            switchTab(document.getElementById('section-orders'));
-        } catch (e) {
-            console.error("Error adding document: ", e);
-            showToast('儲存訂單失敗', true);
-        } finally {
-            loadingOverlay.style.display = 'none';
-        }
+        orders.push(newOrder);
+        saveOrdersToLocalStorage();
+        showToast('訂單已成功儲存！');
+        clearForm();
+        renderOrdersTable();
+        switchTab(document.getElementById('section-orders'));
     });
     
     const renderOrdersTable = () => {
         ordersTableBody.innerHTML = '';
-        orders.slice().sort((a,b) => b.createdAt.toDate() - a.createdAt.toDate()).forEach(order => {
+        orders.slice().sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)).forEach(order => {
             const row = document.createElement('tr');
             row.className = 'hover:bg-gray-50';
             row.innerHTML = `
                 <td class="py-3 px-4">${order.date}</td>
                 <td class="py-3 px-4">${order.name}</td>
-                <td class="py-3 px-4">${order.phone}</td>
                 <td class="py-3 px-4">${order.items.map(i => `${i.name}*${i.quantity}`).join(', ')}</td>
                 <td class="py-3 px-4">$${order.total}</td>
                 <td class="py-3 px-4 text-center">
-                    <button class="text-red-500 hover:text-red-700 delete-order-btn" data-id="${order.docId}">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clip-rule="evenodd" /></svg>
+                    <button class="text-red-500 hover:text-red-700 delete-order-btn" data-id="${order.id}">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block align-text-bottom" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clip-rule="evenodd" /></svg>
                     </button>
                 </td>
             `;
@@ -512,19 +504,13 @@
     ordersTableBody.addEventListener('click', async (e) => {
         const deleteBtn = e.target.closest('.delete-order-btn');
         if (deleteBtn) {
-            const docId = deleteBtn.dataset.id;
-            const confirmed = await showMessage('確定要刪除這筆訂單嗎？', true);
+            const id = parseInt(deleteBtn.dataset.id);
+            const confirmed = await showMessage('確定要從共享清單中刪除這筆訂單嗎？', true);
             if(confirmed) {
-                try {
-                    loadingOverlay.style.display = 'flex';
-                    await deleteDoc(doc(db, `artifacts/${appId}/users/${userId}/orders`, docId));
-                    showToast('訂單已刪除');
-                } catch (e) {
-                    console.error("Error removing document: ", e);
-                    showToast('刪除失敗', true);
-                } finally {
-                    loadingOverlay.style.display = 'none';
-                }
+                orders = orders.filter(order => order.id !== id);
+                saveOrdersToLocalStorage();
+                renderOrdersTable();
+                showToast('訂單已刪除');
             }
         }
     });
@@ -540,11 +526,11 @@
                 <td class="py-3 px-4">$${product.price}</td>
                 <td class="py-3 px-4">${product.supplier}</td>
                 <td class="py-3 px-4 text-center">
-                    <button class="text-blue-500 hover:text-blue-700 mr-2 edit-product-btn" data-id="${product.docId}">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd" /></svg>
+                    <button class="text-blue-500 hover:text-blue-700 mr-2 edit-product-btn" data-id="${product.id}">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block align-text-bottom" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd" /></svg>
                     </button>
-                    <button class="text-red-500 hover:text-red-700 delete-product-btn" data-id="${product.docId}">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clip-rule="evenodd" /></svg>
+                    <button class="text-red-500 hover:text-red-700 delete-product-btn" data-id="${product.id}">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block align-text-bottom" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clip-rule="evenodd" /></svg>
                     </button>
                 </td>
             `;
@@ -556,7 +542,7 @@
         productForm.reset();
         if (product) {
             productModalTitle.textContent = '編輯商品';
-            productId.value = product.docId;
+            productId.value = product.id;
             productName.value = product.name;
             productSku.value = product.sku;
             productPrice.value = product.price;
@@ -584,6 +570,7 @@
 
         const lines = rawText.split('\n');
         let successCount = 0;
+        let productsToAdd = [];
 
         for (const line of lines) {
             const cleanedLine = line.trim();
@@ -594,49 +581,41 @@
             let parsedPrice = 0;
             let parsedSku = '';
 
-            // 1. 從尾部往前找 SKU
-            // 檢查最後一個詞是否符合貨號格式 (SP..., SS...)
             const lastWord = words[words.length - 1];
             if (lastWord.match(/^(SP|SS|SKU)\S+$/i)) {
                 parsedSku = words.pop();
             }
 
-            // 2. 從尾部往前找價格
-            // 檢查現在最後一個詞是否為數字
             const potentialPriceWord = words[words.length - 1];
             if (potentialPriceWord && !isNaN(parseFloat(potentialPriceWord))) {
                 parsedPrice = parseFloat(words.pop());
             }
 
-            // 3. 剩下的部分就是商品名稱
             parsedNameParts = words;
             const parsedName = parsedNameParts.join(' ');
             
             if (!parsedName) {
-                // 如果沒有解析出名稱，跳過這行
                 continue;
             }
 
-            try {
-                const productData = { name: parsedName, sku: parsedSku, price: parsedPrice, supplier: '' };
-                await addDoc(productsRef, productData);
-                successCount++;
-            } catch (e) {
-                console.error("Error adding product from text: ", e);
-            }
+            productsToAdd.push({ id: Date.now() + Math.random(), name: parsedName, sku: parsedSku, price: parsedPrice, supplier: '' });
         }
         
-        if (successCount > 0) {
-            showToast(`成功新增 ${successCount} 個商品！`);
+        if (productsToAdd.length > 0) {
+            products.push(...productsToAdd);
+            saveProductsToLocalStorage();
+            showToast(`成功新增 ${productsToAdd.length} 個商品！`);
+            renderProductsTable();
         } else {
             showToast('未找到可解析的商品資訊，請檢查格式。', true);
         }
-        productRawInput.value = ''; // Clear the textarea after processing
+        productRawInput.value = '';
     });
 
     productForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const docId = productId.value;
+        
+        const id = productId.value ? parseInt(productId.value) : null;
         const name = productName.value;
         const sku = productSku.value;
         const price = parseFloat(productPrice.value);
@@ -647,23 +626,19 @@
             return;
         }
 
-        const productData = { name, sku, price, supplier };
-
-        try {
-            loadingOverlay.style.display = 'flex';
-            if (docId) {
-                await setDoc(doc(db, `artifacts/${appId}/users/${userId}/products`, docId), productData);
-            } else {
-                await addDoc(productsRef, productData);
+        if (id) {
+            const index = products.findIndex(p => p.id === id);
+            if (index !== -1) {
+                products[index] = { ...products[index], name, sku, price, supplier };
             }
-            showToast('商品資料已儲存');
-            closeProductModal();
-        } catch (e) {
-            console.error("Error writing document: ", e);
-            showToast('儲存商品資料失敗', true);
-        } finally {
-            loadingOverlay.style.display = 'none';
+        } else {
+            products.push({ id: Date.now(), name, sku, price, supplier });
         }
+        
+        saveProductsToLocalStorage();
+        renderProductsTable();
+        showToast('商品資料已儲存');
+        closeProductModal();
     });
     
     productsTableBody.addEventListener('click', async (e) => {
@@ -671,73 +646,75 @@
         const deleteBtn = e.target.closest('.delete-product-btn');
 
         if (editBtn) {
-            const docId = editBtn.dataset.id;
-            const product = products.find(p => p.docId === docId);
+            const id = parseInt(editBtn.dataset.id);
+            const product = products.find(p => p.id === id);
             if (product) openProductModal(product);
         }
 
         if (deleteBtn) {
-            const docId = deleteBtn.dataset.id;
+            const id = parseInt(deleteBtn.dataset.id);
             const confirmed = await showMessage('確定要刪除這個商品嗎？', true);
             if (confirmed) {
-                try {
-                    loadingOverlay.style.display = 'flex';
-                    await deleteDoc(doc(db, `artifacts/${appId}/users/${userId}/products`, docId));
-                    showToast('商品已刪除');
-                } catch (e) {
-                    console.error("Error removing document: ", e);
-                    showToast('刪除失敗', true);
-                } finally {
-                    loadingOverlay.style.display = 'none';
-                }
+                products = products.filter(product => product.id !== id);
+                saveProductsToLocalStorage();
+                renderProductsTable();
+                showToast('商品已刪除');
             }
         }
     });
 
-    const initFirebase = async () => {
-        try {
-            const app = initializeApp(firebaseConfig);
-            db = getFirestore(app);
-            auth = getAuth(app);
-            
-            if (initialAuthToken) {
-                await signInWithCustomToken(auth, initialAuthToken);
-            } else {
-                await signInAnonymously(auth);
-            }
-
-            onAuthStateChanged(auth, (user) => {
-                if (user) {
-                    userId = user.uid;
-                    userIdEl.textContent = userId;
-                    productsRef = collection(db, `artifacts/${appId}/users/${userId}/products`);
-                    ordersRef = collection(db, `artifacts/${appId}/users/${userId}/orders`);
-                    setupListeners();
-                } else {
-                    console.log('User is signed out');
-                }
-                loadingOverlay.style.display = 'none';
-            });
-        } catch (e) {
-            console.error("Firebase initialization failed: ", e);
-            showMessage('初始化失敗，請檢查網路連線或稍後再試。', false);
-            loadingOverlay.style.display = 'none';
-        }
-    };
-
-    const setupListeners = () => {
-        onSnapshot(productsRef, (snapshot) => {
-            products = snapshot.docs.map(doc => ({ docId: doc.id, ...doc.data() }));
-            renderProductsTable();
-        });
-        
-        onSnapshot(ordersRef, (snapshot) => {
-            orders = snapshot.docs.map(doc => ({ docId: doc.id, ...doc.data() }));
-            renderOrdersTable();
-        });
+    // Data persistence functions using localStorage
+    const loadDataFromLocalStorage = () => {
+        const storedOrders = localStorage.getItem('orders');
+        const storedProducts = localStorage.getItem('products');
+        orders = storedOrders ? JSON.parse(storedOrders) : [];
+        products = storedProducts ? JSON.parse(storedProducts) : [];
     };
     
-    initFirebase();
+    const saveOrdersToLocalStorage = () => {
+        localStorage.setItem('orders', JSON.stringify(orders));
+    };
+
+    const saveProductsToLocalStorage = () => {
+        localStorage.setItem('products', JSON.stringify(products));
+    };
+
+    // Authentication functions
+    authForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const password = authPasswordInput.value;
+        
+        if (password === SHARED_PASSWORD) {
+            authErrorMessage.style.display = 'none';
+            localStorage.setItem('isLoggedIn', 'true');
+            initApp();
+        } else {
+            authErrorMessage.textContent = '密碼錯誤，請重新輸入。';
+            authErrorMessage.style.display = 'block';
+        }
+    });
+
+    logoutBtn.addEventListener('click', () => {
+        localStorage.removeItem('isLoggedIn');
+        authModal.style.display = 'flex';
+        appContainer.style.display = 'none';
+        showToast('已登出');
+    });
+
+    const initApp = () => {
+        appContainer.style.display = 'block';
+        authModal.style.display = 'none';
+        loadDataFromLocalStorage();
+        renderProductsTable();
+        renderOrdersTable();
+    };
+    
+    // Check if the user is already logged in on page load
+    if (localStorage.getItem('isLoggedIn') === 'true') {
+        initApp();
+    } else {
+        authModal.style.display = 'flex';
+    }
 </script>
 </body>
 </html>
