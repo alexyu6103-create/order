@@ -105,6 +105,10 @@
                                 <input type="text" id="customer-phone" class="w-full p-2 border border-gray-300 rounded-md">
                             </div>
                             <div class="mb-4">
+                                <label for="customer-address" class="block text-md font-medium text-gray-700 mb-1">收件地址/門市</label>
+                                <input type="text" id="customer-address" class="w-full p-2 border border-gray-300 rounded-md">
+                            </div>
+                            <div class="mb-4">
                                 <label for="shipping-method" class="block text-md font-medium text-gray-700 mb-1">寄送方式</label>
                                 <select id="shipping-method" class="w-full p-2 border border-gray-300 rounded-md bg-white">
                                     <option value="none">請選擇</option>
@@ -147,7 +151,7 @@
 
                     <div class="bg-[#FDFBF7] p-4 rounded-lg shadow-inner mb-6">
                         <h3 class="text-lg font-semibold mb-2">從文字貼上商品資訊</h3>
-                        <textarea id="product-raw-input" class="w-full h-24 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#A4907C] focus:border-[#A4907C] transition" placeholder="一次貼上多行商品資訊，每行一個商品&#10;例如：&#10;大尺碼夏季輕鬆A字連身裙$199 SP2046300斤胖mm大码连衣裙夏季新款无袖圆领背心宽松遮肉显瘦内搭长裙&#10;簡約素面寬鬆襯衫$250 CS53200&#10;日系復古牛仔褲$450"></textarea>
+                        <textarea id="product-raw-input" class="w-full h-24 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#A4907C] focus:border-[#A4907C] transition" placeholder="一次貼上多行商品資訊，每行一個商品&#10;格式：[商品名稱] [價格] [貨號] [廠商]&#10;例如：&#10;大尺碼夏季輕鬆A字連身裙 199 SP2046300斤胖mm大码连衣裙夏季新款无袖圆领背心宽松遮肉显瘦内搭长裙&#10;簡約素面寬鬆襯衫 250 CS53200&#10;日系復古牛仔褲 450"></textarea>
                         <button id="parse-product-btn" class="btn-secondary w-full py-2 mt-2 rounded-md font-semibold">解析並批量新增</button>
                     </div>
 
@@ -155,6 +159,7 @@
                         <table class="min-w-full bg-white">
                             <thead class="bg-[#EFEBE5]">
                                 <tr>
+                                    <th class="py-3 px-4 text-left text-sm font-semibold text-gray-600 uppercase">圖片</th>
                                     <th class="py-3 px-4 text-left text-sm font-semibold text-gray-600 uppercase">商品名稱</th>
                                     <th class="py-3 px-4 text-left text-sm font-semibold text-gray-600 uppercase">貨號</th>
                                     <th class="py-3 px-4 text-left text-sm font-semibold text-gray-600 uppercase">價格</th>
@@ -213,9 +218,13 @@
                         <label for="product-price" class="block text-md font-medium text-gray-700 mb-1">價格</label>
                         <input type="number" id="product-price" class="w-full p-2 border border-gray-300 rounded-md" required min="0">
                     </div>
-                    <div class="mb-6">
+                    <div class="mb-4">
                         <label for="product-supplier" class="block text-md font-medium text-gray-700 mb-1">叫貨廠商</label>
                         <input type="text" id="product-supplier" class="w-full p-2 border border-gray-300 rounded-md">
+                    </div>
+                    <div class="mb-6">
+                        <label for="product-image-url" class="block text-md font-medium text-gray-700 mb-1">圖片網址</label>
+                        <input type="url" id="product-image-url" class="w-full p-2 border border-gray-300 rounded-md">
                     </div>
                     <div class="flex justify-end space-x-3">
                         <button type="button" id="cancel-product-btn" class="btn-secondary py-2 px-4 rounded-md font-semibold">取消</button>
@@ -270,6 +279,7 @@
     const orderForm = document.getElementById('order-form');
     const customerName = document.getElementById('customer-name');
     const customerPhone = document.getElementById('customer-phone');
+    const customerAddress = document.getElementById('customer-address');
     const shippingMethod = document.getElementById('shipping-method');
     const orderItemsList = document.getElementById('order-items-list');
     const subtotalAmountEl = document.getElementById('subtotal-amount');
@@ -287,6 +297,7 @@
     const productSku = document.getElementById('product-sku');
     const productPrice = document.getElementById('product-price');
     const productSupplier = document.getElementById('product-supplier');
+    const productImageUrl = document.getElementById('product-image-url');
     const showAddProductModalBtn = document.getElementById('show-add-product-modal-btn');
     const cancelProductBtn = document.getElementById('cancel-product-btn');
     const saveProductBtn = document.getElementById('save-product-btn');
@@ -339,7 +350,9 @@
     });
 
     const calculateTotal = () => {
-        const subtotal = currentOrderItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        const subtotal = currentOrderItems.reduce((sum, item) => {
+            return sum + (item.price === null ? 0 : (item.price * item.quantity));
+        }, 0);
         
         let shippingFee = 0;
         if(shippingMethod.value === '711') shippingFee = 39;
@@ -361,13 +374,20 @@
         }
         currentOrderItems.forEach((item, index) => {
             const itemEl = document.createElement('div');
-            itemEl.className = 'flex items-center justify-between p-2 bg-gray-50 rounded';
+            const borderColor = item.price === null ? 'border-red-400' : 'border-gray-200';
+            const priceDisplay = item.price === null ? '??' : item.price;
+            itemEl.className = `flex items-center justify-between p-2 bg-gray-50 rounded border-2 ${borderColor}`;
             itemEl.innerHTML = `
                 <div class="flex-grow">
-                    <p class="font-semibold">${item.name} (${item.sku})</p>
-                    <p class="text-sm text-gray-500">$${item.price}</p>
+                    <p class="font-semibold">${item.name} <span class="text-sm text-gray-500">(${item.sku})</span></p>
+                    <div class="flex items-center text-sm">
+                        <span class="mr-1 text-gray-500">價格:</span>
+                        <span class="text-sm font-bold text-gray-700">$</span>
+                        <input type="number" value="${item.price === null ? '' : item.price}" min="0" class="w-20 text-center border rounded-md price-input" data-index="${index}" placeholder="??">
+                    </div>
                 </div>
                 <div class="flex items-center">
+                     <span class="text-sm text-gray-500">數量:</span>
                      <input type="number" value="${item.quantity}" min="1" class="w-16 text-center border rounded-md mx-2 quantity-input" data-index="${index}">
                 </div>
                  <button class="text-red-500 hover:text-red-700 remove-item-btn" data-index="${index}">
@@ -389,13 +409,23 @@
     });
     
     orderItemsList.addEventListener('change', (e) => {
-        if(e.target.classList.contains('quantity-input')) {
-            const index = parseInt(e.target.dataset.index);
-            const quantity = parseInt(e.target.value);
+        const target = e.target;
+        const index = parseInt(target.dataset.index);
+
+        if(target.classList.contains('quantity-input')) {
+            const quantity = parseInt(target.value);
             if (quantity > 0) {
                 currentOrderItems[index].quantity = quantity;
                 calculateTotal();
             }
+        } else if (target.classList.contains('price-input')) {
+            const price = parseFloat(target.value);
+            if (!isNaN(price) && price >= 0) {
+                currentOrderItems[index].price = price;
+            } else {
+                currentOrderItems[index].price = null;
+            }
+            calculateTotal();
         }
     });
 
@@ -406,38 +436,139 @@
             return;
         }
 
-        if (products.length === 0) {
-            showToast('請先在「商品管理」頁面新增商品資料！', true);
-            return;
-        }
-
-        const nameMatch = text.match(/(?:姓名|名字)[:：\s]*(\S+)/);
+        const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+        
+        // 解析顧客資訊
+        const nameMatch = text.match(/(?:姓名|名字|收件人)[:：\s]*(\S+)/);
         if (nameMatch) customerName.value = nameMatch[1];
         
         const phoneMatch = text.match(/(?:電話|手機)[:：\s]*(\d{10})/);
         if (phoneMatch) customerPhone.value = phoneMatch[1];
 
+        const addressMatch = text.match(/(?:地址|門市|超商)[:：\s]*([\u4e00-\u9fa5a-zA-Z0-9\s]+)/);
+        if(addressMatch) customerAddress.value = addressMatch[1].trim();
+
         if (text.includes('7-11') || text.includes('711')) {
             shippingMethod.value = '711';
-        } else if (text.includes('全家')) {
+        } else if (text.includes('全家') || text.includes('familymart')) {
             shippingMethod.value = 'familymart';
         }
-        
+
         currentOrderItems = [];
-        products.forEach(product => {
-            const regex = new RegExp(`(?:${product.name})(?:\\s*\\*\\s*|\\s+)?(\\d+)?`, 'g');
-            let match;
-            while ((match = regex.exec(text)) !== null) {
-                const quantity = match[1] ? parseInt(match[1]) : 1;
-                const existingItem = currentOrderItems.find(item => item.id === product.id);
-                if (existingItem) {
-                    existingItem.quantity += quantity;
+        let matchedLines = new Set();
+        
+        const addItem = (item) => {
+            const existingItem = currentOrderItems.find(i => i.sku === item.sku && i.name === item.name);
+            if (existingItem) {
+                existingItem.quantity += item.quantity;
+            } else {
+                currentOrderItems.push(item);
+            }
+        };
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            if (matchedLines.has(line)) continue;
+
+            const skuRegex = /(SS|SP)\d{4}/i;
+            const skuMatch = line.match(skuRegex);
+            
+            // 處理主商品與多行附屬規格的特殊情況
+            if (skuMatch) {
+                const sku = skuMatch[0].toUpperCase();
+                let name = line.replace(skuRegex, '').replace(/\s*[\+\*]\d+/, '').trim();
+                let quantity = 1;
+                let price = null;
+                
+                const quantityMatch = line.match(/[\+\*](\d+)/);
+                if (quantityMatch) {
+                    quantity = parseInt(quantityMatch[1]);
+                }
+
+                // 優先從商品資料庫中尋找價格
+                const matchedProduct = products.find(p => p.sku === sku);
+                if(matchedProduct) {
+                    price = matchedProduct.price;
+                    if(!name) name = matchedProduct.name;
                 } else {
-                    currentOrderItems.push({ ...product, quantity: quantity });
+                    // 如果資料庫中找不到，才從文字中尋找價格 (但這裡我們忽略它以避免誤判)
+                    const priceMatch = line.match(/\$?(\d+)/);
+                    if (priceMatch) {
+                       // price = parseInt(priceMatch[1]); // <-- 移除此行，避免誤判
+                    }
+                }
+                if (!name && matchedProduct) {
+                    name = matchedProduct.name;
+                } else if (!name) {
+                    name = `商品`;
+                }
+                
+                let isMultiLineProduct = false;
+                if (i + 1 < lines.length && !lines[i + 1].match(skuRegex)) {
+                    const nextLineQuantityMatch = lines[i + 1].match(/[\+\*](\d+)/);
+                    if (nextLineQuantityMatch) {
+                        isMultiLineProduct = true;
+                        
+                        let nextLine = lines[i + 1];
+                        const variantName = nextLine.replace(/[\+\*]\d+/, '').trim();
+                        const variantQuantity = parseInt(nextLineQuantityMatch[1]);
+                        
+                        addItem({
+                            id: Date.now() + Math.random(),
+                            name: name + ' ' + variantName,
+                            sku: sku,
+                            price: price,
+                            supplier: matchedProduct ? matchedProduct.supplier : '?',
+                            imageUrl: matchedProduct ? matchedProduct.imageUrl : '',
+                            quantity: variantQuantity
+                        });
+                        matchedLines.add(nextLine);
+                        
+                        // Check for more multi-line variants
+                        for (let j = i + 2; j < lines.length; j++) {
+                            const subsequentLine = lines[j];
+                            const subsequentQuantityMatch = subsequentLine.match(/[\+\*](\d+)/);
+                            if (subsequentQuantityMatch && !subsequentLine.match(skuRegex)) {
+                                const subsequentVariantName = subsequentLine.replace(/[\+\*]\d+/, '').trim();
+                                const subsequentVariantQuantity = parseInt(subsequentQuantityMatch[1]);
+                                addItem({
+                                    id: Date.now() + Math.random(),
+                                    name: name + ' ' + subsequentVariantName,
+                                    sku: sku,
+                                    price: price,
+                                    supplier: matchedProduct ? matchedProduct.supplier : '?',
+                                    imageUrl: matchedProduct ? matchedProduct.imageUrl : '',
+                                    quantity: subsequentVariantQuantity
+                                });
+                                matchedLines.add(subsequentLine);
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                if (!isMultiLineProduct) {
+                     addItem({
+                        id: Date.now() + Math.random(),
+                        name: name,
+                        sku: sku,
+                        price: price,
+                        supplier: matchedProduct ? matchedProduct.supplier : '?',
+                        imageUrl: matchedProduct ? matchedProduct.imageUrl : '',
+                        quantity: quantity
+                    });
+                }
+            } else {
+                // No SKU found, try to match by name from product list
+                const knownProduct = products.find(p => line.includes(p.name));
+                if (knownProduct) {
+                    const quantityMatch = line.match(/[\+\*](\d+)/);
+                    const quantity = quantityMatch ? parseInt(quantityMatch[1]) : 1;
+                    addItem({ ...knownProduct, quantity: quantity });
                 }
             }
-        });
-        
+        }
         renderOrderItems();
         showToast('訂單解析完成！');
     });
@@ -457,17 +588,26 @@
             return;
         }
 
-        const subtotal = currentOrderItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        const hasUnknownPrice = currentOrderItems.some(item => item.price === null);
+        if (hasUnknownPrice) {
+            const confirmed = await showMessage('訂單中包含價格未知的商品，總金額將不準確。確定要儲存嗎？', true);
+            if (!confirmed) {
+                return;
+            }
+        }
+
+        const subtotal = currentOrderItems.reduce((sum, item) => sum + (item.price === null ? 0 : (item.price * item.quantity)), 0);
         let shippingFee = 0;
         if(shippingMethod.value === '711') shippingFee = 39;
         if(shippingMethod.value === 'familymart') shippingFee = 38;
         const total = subtotal + shippingFee;
         
         const newOrder = {
-            id: Date.now(), // Generate unique ID
+            id: Date.now(),
             date: new Date().toLocaleDateString(),
             name: customerName.value,
             phone: customerPhone.value,
+            address: customerAddress.value,
             items: currentOrderItems,
             total: total,
             createdAt: new Date().toISOString()
@@ -486,10 +626,11 @@
         orders.slice().sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)).forEach(order => {
             const row = document.createElement('tr');
             row.className = 'hover:bg-gray-50';
+            const itemString = order.items.map(i => `${i.name}*${i.quantity}`).join(', ');
             row.innerHTML = `
                 <td class="py-3 px-4">${order.date}</td>
                 <td class="py-3 px-4">${order.name}</td>
-                <td class="py-3 px-4">${order.items.map(i => `${i.name}*${i.quantity}`).join(', ')}</td>
+                <td class="py-3 px-4">${itemString}</td>
                 <td class="py-3 px-4">$${order.total}</td>
                 <td class="py-3 px-4 text-center">
                     <button class="text-red-500 hover:text-red-700 delete-order-btn" data-id="${order.id}">
@@ -521,6 +662,7 @@
             const row = document.createElement('tr');
             row.className = 'hover:bg-gray-50';
             row.innerHTML = `
+                <td class="py-3 px-4"><img src="${product.imageUrl || 'https://placehold.co/50x50/EFEBE5/A4907C?text=No+Img'}" onerror="this.src='https://placehold.co/50x50/EFEBE5/A4907C?text=No+Img'" alt="${product.name}" class="w-12 h-12 object-cover rounded-md"></td>
                 <td class="py-3 px-4">${product.name}</td>
                 <td class="py-3 px-4">${product.sku}</td>
                 <td class="py-3 px-4">$${product.price}</td>
@@ -547,6 +689,7 @@
             productSku.value = product.sku;
             productPrice.value = product.price;
             productSupplier.value = product.supplier;
+            productImageUrl.value = product.imageUrl || '';
         } else {
             productModalTitle.textContent = '新增商品';
             productId.value = '';
@@ -568,37 +711,71 @@
             return;
         }
 
-        const lines = rawText.split('\n');
-        let successCount = 0;
+        const lines = rawText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
         let productsToAdd = [];
+        let i = 0;
 
-        for (const line of lines) {
-            const cleanedLine = line.trim();
-            if (!cleanedLine) continue;
-
-            const words = cleanedLine.split(/\s+/);
-            let parsedNameParts = [];
-            let parsedPrice = 0;
-            let parsedSku = '';
-
-            const lastWord = words[words.length - 1];
-            if (lastWord.match(/^(SP|SS|SKU)\S+$/i)) {
-                parsedSku = words.pop();
-            }
-
-            const potentialPriceWord = words[words.length - 1];
-            if (potentialPriceWord && !isNaN(parseFloat(potentialPriceWord))) {
-                parsedPrice = parseFloat(words.pop());
-            }
-
-            parsedNameParts = words;
-            const parsedName = parsedNameParts.join(' ');
+        while(i < lines.length) {
+            const currentLine = lines[i];
+            let name = currentLine;
+            let price = null;
+            let sku = '';
+            let supplier = '';
             
-            if (!parsedName) {
+            const combinedRegex = /^(.*?)(\$?\d+)\s+((SS|SP)\d{4})\s*(.*)$/i;
+            const combinedMatch = currentLine.match(combinedRegex);
+            
+            if (combinedMatch) {
+                name = combinedMatch[1].trim();
+                price = parseInt(combinedMatch[2].replace('$', ''));
+                sku = combinedMatch[3].toUpperCase();
+                supplier = combinedMatch[5].trim();
+                
+                productsToAdd.push({ id: Date.now() + Math.random(), name, sku, price, supplier, imageUrl: '' });
+                i++;
                 continue;
             }
 
-            productsToAdd.push({ id: Date.now() + Math.random(), name: parsedName, sku: parsedSku, price: parsedPrice, supplier: '' });
+            const priceRegex = /^\$?(\d+)/;
+            const skuRegex = /(SS|SP)\d{4}/i;
+
+            let namePart = currentLine.trim();
+            
+            const skuMatch = namePart.match(skuRegex);
+            if(skuMatch) {
+                sku = skuMatch[0].toUpperCase();
+                namePart = namePart.replace(skuMatch[0], '').trim();
+            }
+
+            const priceInLineMatch = namePart.match(priceRegex);
+            if(priceInLineMatch) {
+                price = parseInt(priceInLineMatch[1]);
+                namePart = namePart.replace(priceInLineMatch[0], '').trim();
+            }
+
+            if (price === null && i + 1 < lines.length) {
+                const nextLine = lines[i + 1];
+                const nextPriceMatch = nextLine.match(priceRegex);
+                if (nextPriceMatch) {
+                    price = parseInt(nextPriceMatch[1]);
+                    i++;
+                }
+            }
+
+            if (namePart && price !== null && sku) {
+                const existingProduct = productsToAdd.find(p => p.sku === sku);
+                if (!existingProduct) {
+                    productsToAdd.push({
+                        id: Date.now() + Math.random(),
+                        name: namePart.replace(/一組四入|給三片|附收納/g, '').trim(),
+                        sku,
+                        price,
+                        supplier: '',
+                        imageUrl: ''
+                    });
+                }
+            }
+            i++;
         }
         
         if (productsToAdd.length > 0) {
@@ -620,6 +797,7 @@
         const sku = productSku.value;
         const price = parseFloat(productPrice.value);
         const supplier = productSupplier.value;
+        const imageUrl = productImageUrl.value;
 
         if (!name || isNaN(price) || price < 0) {
             showMessage('商品名稱和價格為必填項目');
@@ -629,10 +807,10 @@
         if (id) {
             const index = products.findIndex(p => p.id === id);
             if (index !== -1) {
-                products[index] = { ...products[index], name, sku, price, supplier };
+                products[index] = { ...products[index], name, sku, price, supplier, imageUrl };
             }
         } else {
-            products.push({ id: Date.now(), name, sku, price, supplier });
+            products.push({ id: Date.now(), name, sku, price, supplier, imageUrl });
         }
         
         saveProductsToLocalStorage();
@@ -663,7 +841,6 @@
         }
     });
 
-    // Data persistence functions using localStorage
     const loadDataFromLocalStorage = () => {
         const storedOrders = localStorage.getItem('orders');
         const storedProducts = localStorage.getItem('products');
@@ -679,7 +856,6 @@
         localStorage.setItem('products', JSON.stringify(products));
     };
 
-    // Authentication functions
     authForm.addEventListener('submit', (e) => {
         e.preventDefault();
         const password = authPasswordInput.value;
@@ -709,7 +885,6 @@
         renderOrdersTable();
     };
     
-    // Check if the user is already logged in on page load
     if (localStorage.getItem('isLoggedIn') === 'true') {
         initApp();
     } else {
