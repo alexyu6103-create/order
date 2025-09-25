@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>翰哥訂單管理系統</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chosen Palette: Warm Neutrals -->
+    <!-- Application Structure Plan: 採用單頁應用程式(SPA)設計，包含三個主要功能區塊：「新增訂單」、「商品管理」和「所有訂單」。使用者可透過頂部導覽按鈕切換。此結構的設計目的是將核心任務——從原始文字快速建立結構化訂單——流程化，讓使用者能從輸入、解析到儲存一氣呵成。這種以任務為導向的流程，比單純模仿試算表介面更有效率，並將關聯功能（如商品管理）整合在同一個頁面中，方便操作。 -->
+    <!-- Visualization & Content Choices: Report Info -> 核心目標是提升資料輸入與管理的效率，而非數據可視化。Goal -> 組織/通知。Viz/Presentation Method -> 採用由 JavaScript 驅動的互動式 HTML 表單與表格。Interaction -> 使用者貼上文字後，點擊按鈕觸發解析，系統自動填寫表單欄位。使用者可再進行編輯與儲存。此設計能提供即時回饋，並大幅減少手動輸入的錯誤。Justification -> 這種互動方式將非結構化的文字訂單轉換為結構化的數據，是此應用的核心價值。Library/Method -> Vanilla JavaScript, Tailwind CSS。 -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body { background-color: #FDFBF7; font-family: 'Inter', 'Noto Sans TC', sans-serif; }
+        .tab-button { transition: all 0.3s ease; }
+        .tab-button.active { background-color: #8D7B68; color: white; }
+        .tab-button:not(.active):hover { background-color: #EFEBE5; }
+        .section { display: none; }
+        .section.active { display: block; }
+        .btn-primary { background-color: #A4907C; color: white; transition: background-color 0.3s; }
+        .btn-primary:hover { background-color: #8D7B68; }
+        .btn-secondary { background-color: #C8B6A6; color: #424242; transition: background-color: 0.3s; }
+        .btn-secondary:hover { background-color: #A4907C; }
+        .btn-danger { background-color: #ef4444; color: white; transition: background-color: 0.3s; }
+        .btn-danger:hover { background-color: #dc2626; }
+        .modal-backdrop {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: none; align-items: center; justify-content: center; z-index: 50;
+        }
+        .modal-content {
+            background-color: white; border-radius: 0.5rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            width: 90%; max-width: 500px;
+        }
+    </style>
+</head>
+<body class="antialiased text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-7xl">
+
+        <header class="mb-8">
+            <h1 class="text-4xl font-bold text-[#655A4F] mb-2">簡易訂單管理系統</h1>
+            <p class="text-lg text-gray-500">一個簡化您訂單處理流程的工具。</p>
+        </header>
+
+        <nav class="flex space-x-2 border-b-2 border-gray-200 mb-8">
+            <button id="tab-new-order" class="tab-button active text-lg py-3 px-6 rounded-t-lg font-semibold">新增訂單</button>
+            <button id="tab-products" class="tab-button text-lg py-3 px-6 rounded-t-lg font-semibold">商品管理</button>
+            <button id="tab-orders" class="tab-button text-lg py-3 px-6 rounded-t-lg font-semibold">所有訂單</button>
+        </nav>
+
+        <main>
+            <!-- Section 1: New Order -->
+            <section id="section-new-order" class="section active">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div class="bg-white p-6 rounded-lg shadow-sm">
+                        <h2 class="text-2xl font-bold mb-4 text-[#8D7B68]">1. 貼上原始訂單資訊</h2>
+                        <textarea id="raw-order-input" class="w-full h-64 p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#A4907C] focus:border-[#A4907C] transition" placeholder="從社群平台或通訊軟體複製的訂單資訊貼在這裡...&#10;例如：&#10;姓名：王小明&#10;電話：0912345678&#10;取貨門市：7-11 鑫承門市&#10;商品：方形收納殼*1, 小香風菱格殼*1"></textarea>
+                        <button id="parse-order-btn" class="btn-primary w-full py-3 mt-4 rounded-md font-semibold text-lg">智慧解析</button>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-lg shadow-sm">
+                        <h2 class="text-2xl font-bold mb-4 text-[#8D7B68]">2. 確認訂單內容</h2>
+                        <form id="order-form">
+                            <div class="mb-4">
+                                <label for="customer-name" class="block text-md font-medium text-gray-700 mb-1">顧客姓名</label>
+                                <input type="text" id="customer-name" class="w-full p-2 border border-gray-300 rounded-md">
+                            </div>
+                            <div class="mb-4">
+                                <label for="customer-phone" class="block text-md font-medium text-gray-700 mb-1">聯絡電話</label>
+                                <input type="text" id="customer-phone" class="w-full p-2 border border-gray-300 rounded-md">
+                            </div>
+                            <div class="mb-4">
+                                <label for="shipping-method" class="block text-md font-medium text-gray-700 mb-1">寄送方式</label>
+                                <select id="shipping-method" class="w-full p-2 border border-gray-300 rounded-md bg-white">
+                                    <option value="none">請選擇</option>
+                                    <option value="711">7-ELEVEN</option>
+                                    <option value="familymart">全家</option>
+                                </select>
+                            </div>
+                            <div id="order-items-container">
+                                <h3 class="text-lg font-semibold mt-6 mb-2">訂購商品</h3>
+                                <div id="order-items-list" class="space-y-2"></div>
+                            </div>
+                             <div class="mt-6 border-t pt-4 space-y-2 text-lg">
+                                <div class="flex justify-between">
+                                    <span>商品總計:</span>
+                                    <span id="subtotal-amount">$0</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span>運費:</span>
+                                    <span id="shipping-fee">$0</span>
+                                </div>
+                                <div class="flex justify-between font-bold text-xl">
+                                    <span>訂單總金額:</span>
+                                    <span id="total-amount">$0</span>
+                                </div>
+                            </div>
+                            <button type="button" id="save-order-btn" class="btn-primary w-full py-3 mt-6 rounded-md font-semibold text-lg">儲存訂單</button>
+                             <button type="button" id="clear-form-btn" class="btn-secondary w-full py-2 mt-2 rounded-md font-semibold">清空表單</button>
+                        </form>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section 2: Product Management -->
+            <section id="section-products" class="section">
+                 <div class="bg-white p-6 rounded-lg shadow-sm">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-2xl font-bold text-[#8D7B68]">商品資料庫</h2>
+                        <button id="show-add-product-modal-btn" class="btn-primary py-2 px-4 rounded-md font-semibold">新增商品</button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-white">
+                            <thead class="bg-[#EFEBE5]">
+                                <tr>
+                                    <th class="py-3 px-4 text-left text-sm font-semibold text-gray-600 uppercase">商品名稱</th>
+                                    <th class="py-3 px-4 text-left text-sm font-semibold text-gray-600 uppercase">貨號</th>
+                                    <th class="py-3 px-4 text-left text-sm font-semibold text-gray-600 uppercase">價格</th>
+                                    <th class="py-3 px-4 text-left text-sm font-semibold text-gray-600 uppercase">叫貨廠商</th>
+                                    <th class="py-3 px-4 text-center text-sm font-semibold text-gray-600 uppercase">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="products-table-body" class="divide-y divide-gray-200">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section 3: All Orders -->
+            <section id="section-orders" class="section">
+                <div class="bg-white p-6 rounded-lg shadow-sm">
+                    <h2 class="text-2xl font-bold mb-4 text-[#8D7B68]">所有訂單紀錄</h2>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-white">
+                            <thead class="bg-[#EFEBE5]">
+                                <tr>
+                                    <th class="py-3 px-4 text-left text-sm font-semibold text-gray-600 uppercase">訂單日期</th>
+                                    <th class="py-3 px-4 text-left text-sm font-semibold text-gray-600 uppercase">姓名</th>
+                                    <th class="py-3 px-4 text-left text-sm font-semibold text-gray-600 uppercase">電話</th>
+                                    <th class="py-3 px-4 text-left text-sm font-semibold text-gray-600 uppercase">商品</th>
+                                    <th class="py-3 px-4 text-left text-sm font-semibold text-gray-600 uppercase">總金額</th>
+                                    <th class="py-3 px-4 text-center text-sm font-semibold text-gray-600 uppercase">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="orders-table-body" class="divide-y divide-gray-200">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Product Modal -->
+    <div id="product-modal" class="modal-backdrop">
+        <div class="modal-content">
+            <div class="p-6">
+                <h3 id="product-modal-title" class="text-2xl font-bold mb-6 text-[#8D7B68]">新增商品</h3>
+                <form id="product-form">
+                    <input type="hidden" id="product-id">
+                    <div class="mb-4">
+                        <label for="product-name" class="block text-md font-medium text-gray-700 mb-1">商品名稱</label>
+                        <input type="text" id="product-name" class="w-full p-2 border border-gray-300 rounded-md" required>
+                    </div>
+                    <div class="mb-4">
+                        <label for="product-sku" class="block text-md font-medium text-gray-700 mb-1">貨號</label>
+                        <input type="text" id="product-sku" class="w-full p-2 border border-gray-300 rounded-md">
+                    </div>
+                     <div class="mb-4">
+                        <label for="product-price" class="block text-md font-medium text-gray-700 mb-1">價格</label>
+                        <input type="number" id="product-price" class="w-full p-2 border border-gray-300 rounded-md" required min="0">
+                    </div>
+                    <div class="mb-6">
+                        <label for="product-supplier" class="block text-md font-medium text-gray-700 mb-1">叫貨廠商</label>
+                        <input type="text" id="product-supplier" class="w-full p-2 border border-gray-300 rounded-md">
+                    </div>
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" id="cancel-product-btn" class="btn-secondary py-2 px-4 rounded-md font-semibold">取消</button>
+                        <button type="submit" id="save-product-btn" class="btn-primary py-2 px-4 rounded-md font-semibold">儲存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed top-5 right-5 bg-green-500 text-white py-2 px-5 rounded-lg shadow-lg opacity-0 translate-y-10 transition-all duration-300">
+        <p id="toast-message"></p>
+    </div>
+
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+
+    const tabs = [
+        { button: document.getElementById('tab-new-order'), section: document.getElementById('section-new-order') },
+        { button: document.getElementById('tab-products'), section: document.getElementById('section-products') },
+        { button: document.getElementById('tab-orders'), section: document.getElementById('section-orders') }
+    ];
+
+    const rawOrderInput = document.getElementById('raw-order-input');
+    const parseOrderBtn = document.getElementById('parse-order-btn');
+    
+    const orderForm = document.getElementById('order-form');
+    const customerName = document.getElementById('customer-name');
+    const customerPhone = document.getElementById('customer-phone');
+    const shippingMethod = document.getElementById('shipping-method');
+    const orderItemsList = document.getElementById('order-items-list');
+
+    const subtotalAmountEl = document.getElementById('subtotal-amount');
+    const shippingFeeEl = document.getElementById('shipping-fee');
+    const totalAmountEl = document.getElementById('total-amount');
+
+    const saveOrderBtn = document.getElementById('save-order-btn');
+    const clearFormBtn = document.getElementById('clear-form-btn');
+    const ordersTableBody = document.getElementById('orders-table-body');
+    const productsTableBody = document.getElementById('products-table-body');
+    
+    const productModal = document.getElementById('product-modal');
+    const productModalTitle = document.getElementById('product-modal-title');
+    const productForm = document.getElementById('product-form');
+    const productId = document.getElementById('product-id');
+    const productName = document.getElementById('product-name');
+    const productSku = document.getElementById('product-sku');
+    const productPrice = document.getElementById('product-price');
+    const productSupplier = document.getElementById('product-supplier');
+    const showAddProductModalBtn = document.getElementById('show-add-product-modal-btn');
+    const cancelProductBtn = document.getElementById('cancel-product-btn');
+    const saveProductBtn = document.getElementById('save-product-btn');
+
+    const toast = document.getElementById('toast');
+    const toastMessage = document.getElementById('toast-message');
+
+    let products = JSON.parse(localStorage.getItem('products')) || [
+        { id: 1, name: '方形收納殼', sku: 'A01', price: 150, supplier: '廠商A' },
+        { id: 2, name: '小香風菱格殼', sku: 'A02', price: 250, supplier: '廠商A' },
+        { id: 3, name: '透明軍規防摔殼', sku: 'B01', price: 200, supplier: '廠商B' },
+    ];
+    let orders = JSON.parse(localStorage.getItem('orders')) || [];
+    let currentOrderItems = [];
+
+    const saveProducts = () => localStorage.setItem('products', JSON.stringify(products));
+    const saveOrders = () => localStorage.setItem('orders', JSON.stringify(orders));
+    
+    const showToast = (message, isError = false) => {
+        toastMessage.textContent = message;
+        toast.className = toast.className.replace(/bg-\w+-500/, isError ? 'bg-red-500' : 'bg-green-500');
+        toast.classList.remove('opacity-0', 'translate-y-10');
+        setTimeout(() => {
+            toast.classList.add('opacity-0', 'translate-y-10');
+        }, 3000);
+    };
+
+    const switchTab = (targetSection) => {
+        tabs.forEach(tab => {
+            const isActive = tab.section === targetSection;
+            tab.button.classList.toggle('active', isActive);
+            tab.section.classList.toggle('active', isActive);
+        });
+    };
+
+    tabs.forEach(tab => {
+        tab.button.addEventListener('click', () => switchTab(tab.section));
+    });
+
+    const calculateTotal = () => {
+        const subtotal = currentOrderItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        
+        let shippingFee = 0;
+        if(shippingMethod.value === '711') shippingFee = 39;
+        if(shippingMethod.value === 'familymart') shippingFee = 38;
+
+        const total = subtotal + shippingFee;
+        
+        subtotalAmountEl.textContent = `$${subtotal}`;
+        shippingFeeEl.textContent = `$${shippingFee}`;
+        totalAmountEl.textContent = `$${total}`;
+    };
+
+    shippingMethod.addEventListener('change', calculateTotal);
+    
+    const renderOrderItems = () => {
+        orderItemsList.innerHTML = '';
+        if (currentOrderItems.length === 0) {
+            orderItemsList.innerHTML = `<p class="text-gray-500">尚未解析到商品</p>`;
+        }
+        currentOrderItems.forEach((item, index) => {
+            const itemEl = document.createElement('div');
+            itemEl.className = 'flex items-center justify-between p-2 bg-gray-50 rounded';
+            itemEl.innerHTML = `
+                <div class="flex-grow">
+                    <p class="font-semibold">${item.name} (${item.sku})</p>
+                    <p class="text-sm text-gray-500">$${item.price}</p>
+                </div>
+                <div class="flex items-center">
+                     <input type="number" value="${item.quantity}" min="1" class="w-16 text-center border rounded-md mx-2 quantity-input" data-index="${index}">
+                </div>
+                 <button class="text-red-500 hover:text-red-700 remove-item-btn" data-index="${index}">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clip-rule="evenodd" /></svg>
+                </button>
+            `;
+            orderItemsList.appendChild(itemEl);
+        });
+        calculateTotal();
+    };
+
+    orderItemsList.addEventListener('click', (e) => {
+        const removeBtn = e.target.closest('.remove-item-btn');
+        if (removeBtn) {
+            const index = parseInt(removeBtn.dataset.index);
+            currentOrderItems.splice(index, 1);
+            renderOrderItems();
+        }
+    });
+    
+    orderItemsList.addEventListener('change', (e) => {
+        if(e.target.classList.contains('quantity-input')) {
+            const index = parseInt(e.target.dataset.index);
+            const quantity = parseInt(e.target.value);
+            if (quantity > 0) {
+                currentOrderItems[index].quantity = quantity;
+                calculateTotal();
+            }
+        }
+    });
+
+    parseOrderBtn.addEventListener('click', () => {
+        const text = rawOrderInput.value;
+        if (!text.trim()) {
+            showToast('請先貼上訂單資訊', true);
+            return;
+        }
+
+        const nameMatch = text.match(/(?:姓名|名字)[:：\s]*(\S+)/);
+        if (nameMatch) customerName.value = nameMatch[1];
+        
+        const phoneMatch = text.match(/(?:電話|手機)[:：\s]*(\d{10})/);
+        if (phoneMatch) customerPhone.value = phoneMatch[1];
+
+        if (text.includes('7-11') || text.includes('711')) {
+            shippingMethod.value = '711';
+        } else if (text.includes('全家')) {
+            shippingMethod.value = 'familymart';
+        }
+        
+        currentOrderItems = [];
+        products.forEach(product => {
+            const regex = new RegExp(product.name, 'g');
+            if (text.match(regex)) {
+                const quantityMatch = text.match(new RegExp(product.name + `(?:\\s*\\*\\s*|\\s+)(\\d+)`));
+                const quantity = quantityMatch ? parseInt(quantityMatch[1]) : 1;
+                
+                const existingItem = currentOrderItems.find(item => item.id === product.id);
+                if (existingItem) {
+                    existingItem.quantity += quantity;
+                } else {
+                    currentOrderItems.push({ ...product, quantity: quantity });
+                }
+            }
+        });
+
+        renderOrderItems();
+        showToast('訂單解析完成！');
+    });
+
+    const clearForm = () => {
+        orderForm.reset();
+        currentOrderItems = [];
+        renderOrderItems();
+        rawOrderInput.value = '';
+    }
+    
+    clearFormBtn.addEventListener('click', clearForm);
+
+    saveOrderBtn.addEventListener('click', () => {
+        if (!customerName.value || !customerPhone.value || currentOrderItems.length === 0 || shippingMethod.value === 'none') {
+            showToast('訂單資訊不完整', true);
+            return;
+        }
+
+        const subtotal = currentOrderItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        let shippingFee = 0;
+        if(shippingMethod.value === '711') shippingFee = 39;
+        if(shippingMethod.value === 'familymart') shippingFee = 38;
+        const total = subtotal + shippingFee;
+
+        const newOrder = {
+            id: Date.now(),
+            date: new Date().toLocaleDateString(),
+            name: customerName.value,
+            phone: customerPhone.value,
+            items: currentOrderItems,
+            total: total,
+        };
+        orders.push(newOrder);
+        saveOrders();
+        renderOrdersTable();
+        clearForm();
+        showToast('訂單已成功儲存！');
+        switchTab(document.getElementById('section-orders'));
+    });
+    
+    const renderOrdersTable = () => {
+        ordersTableBody.innerHTML = '';
+        orders.slice().reverse().forEach(order => {
+            const row = document.createElement('tr');
+            row.className = 'hover:bg-gray-50';
+            row.innerHTML = `
+                <td class="py-3 px-4">${order.date}</td>
+                <td class="py-3 px-4">${order.name}</td>
+                <td class="py-3 px-4">${order.phone}</td>
+                <td class="py-3 px-4">${order.items.map(i => `${i.name}*${i.quantity}`).join(', ')}</td>
+                <td class="py-3 px-4">$${order.total}</td>
+                <td class="py-3 px-4 text-center">
+                    <button class="text-red-500 hover:text-red-700 delete-order-btn" data-id="${order.id}">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clip-rule="evenodd" /></svg>
+                    </button>
+                </td>
+            `;
+            ordersTableBody.appendChild(row);
+        });
+    };
+    
+    ordersTableBody.addEventListener('click', (e) => {
+        const deleteBtn = e.target.closest('.delete-order-btn');
+        if (deleteBtn) {
+            const orderId = parseInt(deleteBtn.dataset.id);
+            if(confirm('確定要刪除這筆訂單嗎？')) {
+                orders = orders.filter(o => o.id !== orderId);
+                saveOrders();
+                renderOrdersTable();
+                showToast('訂單已刪除');
+            }
+        }
+    });
+
+    const renderProductsTable = () => {
+        productsTableBody.innerHTML = '';
+        products.forEach(product => {
+            const row = document.createElement('tr');
+            row.className = 'hover:bg-gray-50';
+            row.innerHTML = `
+                <td class="py-3 px-4">${product.name}</td>
+                <td class="py-3 px-4">${product.sku}</td>
+                <td class="py-3 px-4">$${product.price}</td>
+                <td class="py-3 px-4">${product.supplier}</td>
+                <td class="py-3 px-4 text-center">
+                    <button class="text-blue-500 hover:text-blue-700 mr-2 edit-product-btn" data-id="${product.id}">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd" /></svg>
+                    </button>
+                    <button class="text-red-500 hover:text-red-700 delete-product-btn" data-id="${product.id}">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clip-rule="evenodd" /></svg>
+                    </button>
+                </td>
+            `;
+            productsTableBody.appendChild(row);
+        });
+    };
+    
+    const openProductModal = (product = null) => {
+        productForm.reset();
+        if (product) {
+            productModalTitle.textContent = '編輯商品';
+            productId.value = product.id;
+            productName.value = product.name;
+            productSku.value = product.sku;
+            productPrice.value = product.price;
+            productSupplier.value = product.supplier;
+        } else {
+            productModalTitle.textContent = '新增商品';
+            productId.value = '';
+        }
+        productModal.style.display = 'flex';
+    };
+
+    const closeProductModal = () => {
+        productModal.style.display = 'none';
+    };
+
+    showAddProductModalBtn.addEventListener('click', () => openProductModal());
+    cancelProductBtn.addEventListener('click', closeProductModal);
+
+    productForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const id = productId.value;
+        const name = productName.value;
+        const sku = productSku.value;
+        const price = parseFloat(productPrice.value);
+        const supplier = productSupplier.value;
+
+        if (!name || isNaN(price) || price < 0) {
+            showToast('商品名稱和價格為必填項目', true);
+            return;
+        }
+
+        if (id) {
+            const index = products.findIndex(p => p.id == id);
+            if (index !== -1) {
+                products[index] = { id: parseInt(id), name, sku, price, supplier };
+            }
+        } else {
+            const newId = products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1;
+            products.push({ id: newId, name, sku, price, supplier });
+        }
+        
+        saveProducts();
+        renderProductsTable();
+        closeProductModal();
+        showToast('商品資料已儲存');
+    });
+    
+    productsTableBody.addEventListener('click', (e) => {
+        const editBtn = e.target.closest('.edit-product-btn');
+        const deleteBtn = e.target.closest('.delete-product-btn');
+
+        if (editBtn) {
+            const prodId = parseInt(editBtn.dataset.id);
+            const product = products.find(p => p.id === prodId);
+            if (product) openProductModal(product);
+        }
+
+        if (deleteBtn) {
+            const prodId = parseInt(deleteBtn.dataset.id);
+            if (confirm('確定要刪除這個商品嗎？')) {
+                products = products.filter(p => p.id !== prodId);
+                saveProducts();
+                renderProductsTable();
+                showToast('商品已刪除');
+            }
+        }
+    });
+
+    renderOrdersTable();
+    renderProductsTable();
+});
+</script>
+</body>
+</html>
