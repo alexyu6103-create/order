@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>翰哥訂單管理系統</title>
+    <title>進階訂單管理系統</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Chosen Palette: Warm Neutrals -->
-    <!-- Application Structure Plan: 採用單頁應用程式(SPA)設計，包含三個主要功能區塊：「新增訂單」、「商品管理」和「所有訂單」。使用者可透過頂部導覽按鈕切換。此結構的設計目的是將核心任務——從原始文字快速建立結構化訂單——流程化，讓使用者能從輸入、解析到儲存一氣呵成。這種以任務為導向的流程，比單純模仿試算表介面更有效率，並將關聯功能（如商品管理）整合在同一個頁面中，方便操作。 -->
-    <!-- Visualization & Content Choices: Report Info -> 核心目標是提升資料輸入與管理的效率，而非數據可視化。Goal -> 組織/通知。Viz/Presentation Method -> 採用由 JavaScript 驅動的互動式 HTML 表單與表格。Interaction -> 使用者貼上文字後，點擊按鈕觸發解析，系統自動填寫表單欄位。使用者可再進行編輯與儲存。此設計能提供即時回饋，並大幅減少手動輸入的錯誤。Justification -> 這種互動方式將非結構化的文字訂單轉換為結構化的數據，是此應用的核心價值。Library/Method -> Vanilla JavaScript, Tailwind CSS。 -->
+    <!-- Application Structure Plan: 採用單頁應用程式(SPA)設計，並將資料儲存方式從本地localStorage升級為雲端Firestore資料庫。此版本仍包含三個主要區塊：「新增訂單」、「商品管理」和「所有訂單」，並透過頂部導覽按鈕切換。核心改變在於所有資料操作（新增、編輯、刪除）都將即時同步到雲端，實現資料的永久保存和跨裝置存取。頁面上會顯示使用者的專屬ID，以便未來進行資料分享與協作。此架構確保了應用程式的穩定性與可擴展性。 -->
+    <!-- Visualization & Content Choices: Report Info -> 核心目標從單機資料輸入升級為雲端資料管理與即時同步。Goal -> 組織/持久化/協作。Viz/Presentation Method -> 沿用由 JavaScript 驅動的互動式 HTML 表單與表格，但背後資料來源切換至Firestore。Interaction -> 使用者操作將觸發對Firestore資料庫的讀寫，而onSnapshot監聽器會即時更新UI，實現資料同步。Justification -> 這種即時資料流能提供無縫的用戶體驗，並為多人協作奠定基礎。Library/Method -> Vanilla JavaScript, Tailwind CSS, Firebase SDK (Firestore & Auth)。 -->
     <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
     <style>
         body { background-color: #FDFBF7; font-family: 'Inter', 'Noto Sans TC', sans-serif; }
@@ -20,7 +20,7 @@
         .btn-primary:hover { background-color: #8D7B68; }
         .btn-secondary { background-color: #C8B6A6; color: #424242; transition: background-color: 0.3s; }
         .btn-secondary:hover { background-color: #A4907C; }
-        .btn-danger { background-color: #ef4444; color: white; transition: background-color: 0.3s; }
+        .btn-danger { background-color: #ef4444; color: white; transition: background-color 0.3s; }
         .btn-danger:hover { background-color: #dc2626; }
         .modal-backdrop {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -32,15 +32,37 @@
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
             width: 90%; max-width: 500px;
         }
+        .loading-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255, 255, 255, 0.8);
+            display: flex; justify-content: center; align-items: center; z-index: 100;
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #A4907C;
+            animation: spin 1s ease infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body class="antialiased text-gray-800">
 
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="spinner"></div>
+    </div>
+
     <div class="container mx-auto p-4 md:p-8 max-w-7xl">
 
         <header class="mb-8">
-            <h1 class="text-4xl font-bold text-[#655A4F] mb-2">簡易訂單管理系統</h1>
-            <p class="text-lg text-gray-500">一個簡化您訂單處理流程的工具。</p>
+            <h1 class="text-4xl font-bold text-[#655A4F] mb-2">進階訂單管理系統</h1>
+            <p class="text-lg text-gray-500 mb-2">一個簡化您訂單處理流程的雲端工具。</p>
+            <p class="text-sm text-gray-500">您的專屬使用者ID: <span id="user-id" class="font-mono font-bold text-[#8D7B68] break-all"></span></p>
         </header>
 
         <nav class="flex space-x-2 border-b-2 border-gray-200 mb-8">
@@ -110,6 +132,13 @@
                         <h2 class="text-2xl font-bold text-[#8D7B68]">商品資料庫</h2>
                         <button id="show-add-product-modal-btn" class="btn-primary py-2 px-4 rounded-md font-semibold">新增商品</button>
                     </div>
+
+                    <div class="bg-[#FDFBF7] p-4 rounded-lg shadow-inner mb-6">
+                        <h3 class="text-lg font-semibold mb-2">從文字貼上商品資訊</h3>
+                        <textarea id="product-raw-input" class="w-full h-24 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#A4907C] focus:border-[#A4907C] transition" placeholder="一次貼上多行商品資訊，每行一個商品&#10;例如：&#10;大尺碼夏季輕鬆A字連身裙$199 SP2046300斤胖mm大码连衣裙夏季新款无袖圆领背心宽松遮肉显瘦内搭长裙&#10;簡約素面寬鬆襯衫$250 CS53200&#10;日系復古牛仔褲$450"></textarea>
+                        <button id="parse-product-btn" class="btn-secondary w-full py-2 mt-2 rounded-md font-semibold">解析並批量新增</button>
+                    </div>
+
                     <div class="overflow-x-auto">
                         <table class="min-w-full bg-white">
                             <thead class="bg-[#EFEBE5]">
@@ -184,16 +213,41 @@
             </div>
         </div>
     </div>
-    
+
+    <!-- Message Box -->
+    <div id="message-box" class="modal-backdrop">
+        <div class="modal-content p-6">
+            <p id="message-text" class="text-center font-semibold mb-4"></p>
+            <div class="flex justify-center space-x-4">
+                <button id="message-confirm-btn" class="btn-primary py-2 px-4 rounded-md font-semibold">確定</button>
+                <button id="message-cancel-btn" class="btn-secondary py-2 px-4 rounded-md font-semibold" style="display:none;">取消</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Notification -->
     <div id="toast" class="fixed top-5 right-5 bg-green-500 text-white py-2 px-5 rounded-lg shadow-lg opacity-0 translate-y-10 transition-all duration-300">
         <p id="toast-message"></p>
     </div>
 
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, addDoc, setDoc, deleteDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { setLogLevel } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
 
-<script>
-document.addEventListener('DOMContentLoaded', () => {
+    setLogLevel('debug');
 
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+    const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : '';
+    
+    let db;
+    let auth;
+    let userId;
+    let productsRef;
+    let ordersRef;
+    
     const tabs = [
         { button: document.getElementById('tab-new-order'), section: document.getElementById('section-new-order') },
         { button: document.getElementById('tab-products'), section: document.getElementById('section-products') },
@@ -229,21 +283,40 @@ document.addEventListener('DOMContentLoaded', () => {
     const showAddProductModalBtn = document.getElementById('show-add-product-modal-btn');
     const cancelProductBtn = document.getElementById('cancel-product-btn');
     const saveProductBtn = document.getElementById('save-product-btn');
+    const userIdEl = document.getElementById('user-id');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    
+    const messageBox = document.getElementById('message-box');
+    const messageText = document.getElementById('message-text');
+    const messageConfirmBtn = document.getElementById('message-confirm-btn');
+    const messageCancelBtn = document.getElementById('message-cancel-btn');
 
     const toast = document.getElementById('toast');
     const toastMessage = document.getElementById('toast-message');
 
-    let products = JSON.parse(localStorage.getItem('products')) || [
-        { id: 1, name: '方形收納殼', sku: 'A01', price: 150, supplier: '廠商A' },
-        { id: 2, name: '小香風菱格殼', sku: 'A02', price: 250, supplier: '廠商A' },
-        { id: 3, name: '透明軍規防摔殼', sku: 'B01', price: 200, supplier: '廠商B' },
-    ];
-    let orders = JSON.parse(localStorage.getItem('orders')) || [];
-    let currentOrderItems = [];
+    const productRawInput = document.getElementById('product-raw-input');
+    const parseProductBtn = document.getElementById('parse-product-btn');
 
-    const saveProducts = () => localStorage.setItem('products', JSON.stringify(products));
-    const saveOrders = () => localStorage.setItem('orders', JSON.stringify(orders));
+    let products = [];
+    let orders = [];
+    let currentOrderItems = [];
     
+    const showMessage = (message, isConfirm = false) => {
+        messageText.textContent = message;
+        messageCancelBtn.style.display = isConfirm ? 'inline-block' : 'none';
+        messageBox.style.display = 'flex';
+        return new Promise(resolve => {
+            messageConfirmBtn.onclick = () => {
+                messageBox.style.display = 'none';
+                resolve(true);
+            };
+            messageCancelBtn.onclick = () => {
+                messageBox.style.display = 'none';
+                resolve(false);
+            };
+        });
+    };
+
     const showToast = (message, isError = false) => {
         toastMessage.textContent = message;
         toast.className = toast.className.replace(/bg-\w+-500/, isError ? 'bg-red-500' : 'bg-green-500');
@@ -333,6 +406,11 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        if (products.length === 0) {
+            showToast('請先在「商品管理」頁面新增商品資料！', true);
+            return;
+        }
+
         const nameMatch = text.match(/(?:姓名|名字)[:：\s]*(\S+)/);
         if (nameMatch) customerName.value = nameMatch[1];
         
@@ -346,13 +424,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         currentOrderItems = [];
+        // Iterate through all known products to find matches in the pasted text
         products.forEach(product => {
-            const regex = new RegExp(product.name, 'g');
-            if (text.match(regex)) {
-                const quantityMatch = text.match(new RegExp(product.name + `(?:\\s*\\*\\s*|\\s+)(\\d+)`));
-                const quantity = quantityMatch ? parseInt(quantityMatch[1]) : 1;
+            const regex = new RegExp(`(?:${product.name})(?:\\s*\\*\\s*|\\s+)?(\\d+)?`, 'g');
+            let match;
+            while ((match = regex.exec(text)) !== null) {
+                const quantity = match[1] ? parseInt(match[1]) : 1;
                 
-                const existingItem = currentOrderItems.find(item => item.id === product.id);
+                const existingItem = currentOrderItems.find(item => item.docId === product.docId);
                 if (existingItem) {
                     existingItem.quantity += quantity;
                 } else {
@@ -360,7 +439,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         });
-
+        
         renderOrderItems();
         showToast('訂單解析完成！');
     });
@@ -374,7 +453,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     clearFormBtn.addEventListener('click', clearForm);
 
-    saveOrderBtn.addEventListener('click', () => {
+    saveOrderBtn.addEventListener('click', async () => {
         if (!customerName.value || !customerPhone.value || currentOrderItems.length === 0 || shippingMethod.value === 'none') {
             showToast('訂單資訊不完整', true);
             return;
@@ -387,24 +466,31 @@ document.addEventListener('DOMContentLoaded', () => {
         const total = subtotal + shippingFee;
 
         const newOrder = {
-            id: Date.now(),
             date: new Date().toLocaleDateString(),
             name: customerName.value,
             phone: customerPhone.value,
             items: currentOrderItems,
             total: total,
+            createdAt: new Date()
         };
-        orders.push(newOrder);
-        saveOrders();
-        renderOrdersTable();
-        clearForm();
-        showToast('訂單已成功儲存！');
-        switchTab(document.getElementById('section-orders'));
+        
+        try {
+            loadingOverlay.style.display = 'flex';
+            await addDoc(ordersRef, newOrder);
+            showToast('訂單已成功儲存！');
+            clearForm();
+            switchTab(document.getElementById('section-orders'));
+        } catch (e) {
+            console.error("Error adding document: ", e);
+            showToast('儲存訂單失敗', true);
+        } finally {
+            loadingOverlay.style.display = 'none';
+        }
     });
     
     const renderOrdersTable = () => {
         ordersTableBody.innerHTML = '';
-        orders.slice().reverse().forEach(order => {
+        orders.slice().sort((a,b) => b.createdAt.toDate() - a.createdAt.toDate()).forEach(order => {
             const row = document.createElement('tr');
             row.className = 'hover:bg-gray-50';
             row.innerHTML = `
@@ -414,7 +500,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td class="py-3 px-4">${order.items.map(i => `${i.name}*${i.quantity}`).join(', ')}</td>
                 <td class="py-3 px-4">$${order.total}</td>
                 <td class="py-3 px-4 text-center">
-                    <button class="text-red-500 hover:text-red-700 delete-order-btn" data-id="${order.id}">
+                    <button class="text-red-500 hover:text-red-700 delete-order-btn" data-id="${order.docId}">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clip-rule="evenodd" /></svg>
                     </button>
                 </td>
@@ -423,15 +509,22 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
     
-    ordersTableBody.addEventListener('click', (e) => {
+    ordersTableBody.addEventListener('click', async (e) => {
         const deleteBtn = e.target.closest('.delete-order-btn');
         if (deleteBtn) {
-            const orderId = parseInt(deleteBtn.dataset.id);
-            if(confirm('確定要刪除這筆訂單嗎？')) {
-                orders = orders.filter(o => o.id !== orderId);
-                saveOrders();
-                renderOrdersTable();
-                showToast('訂單已刪除');
+            const docId = deleteBtn.dataset.id;
+            const confirmed = await showMessage('確定要刪除這筆訂單嗎？', true);
+            if(confirmed) {
+                try {
+                    loadingOverlay.style.display = 'flex';
+                    await deleteDoc(doc(db, `artifacts/${appId}/users/${userId}/orders`, docId));
+                    showToast('訂單已刪除');
+                } catch (e) {
+                    console.error("Error removing document: ", e);
+                    showToast('刪除失敗', true);
+                } finally {
+                    loadingOverlay.style.display = 'none';
+                }
             }
         }
     });
@@ -447,10 +540,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td class="py-3 px-4">$${product.price}</td>
                 <td class="py-3 px-4">${product.supplier}</td>
                 <td class="py-3 px-4 text-center">
-                    <button class="text-blue-500 hover:text-blue-700 mr-2 edit-product-btn" data-id="${product.id}">
+                    <button class="text-blue-500 hover:text-blue-700 mr-2 edit-product-btn" data-id="${product.docId}">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd" /></svg>
                     </button>
-                    <button class="text-red-500 hover:text-red-700 delete-product-btn" data-id="${product.id}">
+                    <button class="text-red-500 hover:text-red-700 delete-product-btn" data-id="${product.docId}">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clip-rule="evenodd" /></svg>
                     </button>
                 </td>
@@ -463,7 +556,7 @@ document.addEventListener('DOMContentLoaded', () => {
         productForm.reset();
         if (product) {
             productModalTitle.textContent = '編輯商品';
-            productId.value = product.id;
+            productId.value = product.docId;
             productName.value = product.name;
             productSku.value = product.sku;
             productPrice.value = product.price;
@@ -482,59 +575,169 @@ document.addEventListener('DOMContentLoaded', () => {
     showAddProductModalBtn.addEventListener('click', () => openProductModal());
     cancelProductBtn.addEventListener('click', closeProductModal);
 
-    productForm.addEventListener('submit', (e) => {
+    parseProductBtn.addEventListener('click', async () => {
+        const rawText = productRawInput.value.trim();
+        if (!rawText) {
+            showToast('請貼上商品資訊', true);
+            return;
+        }
+
+        const lines = rawText.split('\n');
+        let successCount = 0;
+
+        for (const line of lines) {
+            const cleanedLine = line.trim();
+            if (!cleanedLine) continue;
+
+            const words = cleanedLine.split(/\s+/);
+            let parsedNameParts = [];
+            let parsedPrice = 0;
+            let parsedSku = '';
+
+            // 1. 從尾部往前找 SKU
+            // 檢查最後一個詞是否符合貨號格式 (SP..., SS...)
+            const lastWord = words[words.length - 1];
+            if (lastWord.match(/^(SP|SS|SKU)\S+$/i)) {
+                parsedSku = words.pop();
+            }
+
+            // 2. 從尾部往前找價格
+            // 檢查現在最後一個詞是否為數字
+            const potentialPriceWord = words[words.length - 1];
+            if (potentialPriceWord && !isNaN(parseFloat(potentialPriceWord))) {
+                parsedPrice = parseFloat(words.pop());
+            }
+
+            // 3. 剩下的部分就是商品名稱
+            parsedNameParts = words;
+            const parsedName = parsedNameParts.join(' ');
+            
+            if (!parsedName) {
+                // 如果沒有解析出名稱，跳過這行
+                continue;
+            }
+
+            try {
+                const productData = { name: parsedName, sku: parsedSku, price: parsedPrice, supplier: '' };
+                await addDoc(productsRef, productData);
+                successCount++;
+            } catch (e) {
+                console.error("Error adding product from text: ", e);
+            }
+        }
+        
+        if (successCount > 0) {
+            showToast(`成功新增 ${successCount} 個商品！`);
+        } else {
+            showToast('未找到可解析的商品資訊，請檢查格式。', true);
+        }
+        productRawInput.value = ''; // Clear the textarea after processing
+    });
+
+    productForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const id = productId.value;
+        const docId = productId.value;
         const name = productName.value;
         const sku = productSku.value;
         const price = parseFloat(productPrice.value);
         const supplier = productSupplier.value;
 
         if (!name || isNaN(price) || price < 0) {
-            showToast('商品名稱和價格為必填項目', true);
+            showMessage('商品名稱和價格為必填項目');
             return;
         }
 
-        if (id) {
-            const index = products.findIndex(p => p.id == id);
-            if (index !== -1) {
-                products[index] = { id: parseInt(id), name, sku, price, supplier };
+        const productData = { name, sku, price, supplier };
+
+        try {
+            loadingOverlay.style.display = 'flex';
+            if (docId) {
+                await setDoc(doc(db, `artifacts/${appId}/users/${userId}/products`, docId), productData);
+            } else {
+                await addDoc(productsRef, productData);
             }
-        } else {
-            const newId = products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1;
-            products.push({ id: newId, name, sku, price, supplier });
+            showToast('商品資料已儲存');
+            closeProductModal();
+        } catch (e) {
+            console.error("Error writing document: ", e);
+            showToast('儲存商品資料失敗', true);
+        } finally {
+            loadingOverlay.style.display = 'none';
         }
-        
-        saveProducts();
-        renderProductsTable();
-        closeProductModal();
-        showToast('商品資料已儲存');
     });
     
-    productsTableBody.addEventListener('click', (e) => {
+    productsTableBody.addEventListener('click', async (e) => {
         const editBtn = e.target.closest('.edit-product-btn');
         const deleteBtn = e.target.closest('.delete-product-btn');
 
         if (editBtn) {
-            const prodId = parseInt(editBtn.dataset.id);
-            const product = products.find(p => p.id === prodId);
+            const docId = editBtn.dataset.id;
+            const product = products.find(p => p.docId === docId);
             if (product) openProductModal(product);
         }
 
         if (deleteBtn) {
-            const prodId = parseInt(deleteBtn.dataset.id);
-            if (confirm('確定要刪除這個商品嗎？')) {
-                products = products.filter(p => p.id !== prodId);
-                saveProducts();
-                renderProductsTable();
-                showToast('商品已刪除');
+            const docId = deleteBtn.dataset.id;
+            const confirmed = await showMessage('確定要刪除這個商品嗎？', true);
+            if (confirmed) {
+                try {
+                    loadingOverlay.style.display = 'flex';
+                    await deleteDoc(doc(db, `artifacts/${appId}/users/${userId}/products`, docId));
+                    showToast('商品已刪除');
+                } catch (e) {
+                    console.error("Error removing document: ", e);
+                    showToast('刪除失敗', true);
+                } finally {
+                    loadingOverlay.style.display = 'none';
+                }
             }
         }
     });
 
-    renderOrdersTable();
-    renderProductsTable();
-});
+    const initFirebase = async () => {
+        try {
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+            
+            if (initialAuthToken) {
+                await signInWithCustomToken(auth, initialAuthToken);
+            } else {
+                await signInAnonymously(auth);
+            }
+
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    userId = user.uid;
+                    userIdEl.textContent = userId;
+                    productsRef = collection(db, `artifacts/${appId}/users/${userId}/products`);
+                    ordersRef = collection(db, `artifacts/${appId}/users/${userId}/orders`);
+                    setupListeners();
+                } else {
+                    console.log('User is signed out');
+                }
+                loadingOverlay.style.display = 'none';
+            });
+        } catch (e) {
+            console.error("Firebase initialization failed: ", e);
+            showMessage('初始化失敗，請檢查網路連線或稍後再試。', false);
+            loadingOverlay.style.display = 'none';
+        }
+    };
+
+    const setupListeners = () => {
+        onSnapshot(productsRef, (snapshot) => {
+            products = snapshot.docs.map(doc => ({ docId: doc.id, ...doc.data() }));
+            renderProductsTable();
+        });
+        
+        onSnapshot(ordersRef, (snapshot) => {
+            orders = snapshot.docs.map(doc => ({ docId: doc.id, ...doc.data() }));
+            renderOrdersTable();
+        });
+    };
+    
+    initFirebase();
 </script>
 </body>
 </html>
