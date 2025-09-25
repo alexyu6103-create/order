@@ -144,9 +144,12 @@
             <!-- Section 2: Product Management -->
             <section id="section-products" class="section">
                  <div class="bg-white p-6 rounded-lg shadow-sm">
-                    <div class="flex justify-between items-center mb-4">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 space-y-2 md:space-y-0">
                         <h2 class="text-2xl font-bold text-[#8D7B68]">商品資料庫</h2>
-                        <button id="show-add-product-modal-btn" class="btn-primary py-2 px-4 rounded-md font-semibold">新增商品</button>
+                        <div class="flex space-x-2">
+                             <button id="clear-all-products-btn" class="btn-danger py-2 px-4 rounded-md font-semibold">一鍵清空所有商品</button>
+                            <button id="show-add-product-modal-btn" class="btn-primary py-2 px-4 rounded-md font-semibold">新增商品</button>
+                        </div>
                     </div>
 
                     <div class="bg-[#FDFBF7] p-4 rounded-lg shadow-inner mb-6">
@@ -310,6 +313,7 @@
     const toastMessage = document.getElementById('toast-message');
     const productRawInput = document.getElementById('product-raw-input');
     const parseProductBtn = document.getElementById('parse-product-btn');
+    const clearAllProductsBtn = document.getElementById('clear-all-products-btn');
 
     // Utility functions for UI
     const showMessage = (message, isConfirm = false) => {
@@ -838,6 +842,16 @@
                 renderProductsTable();
                 showToast('商品已刪除');
             }
+        }
+    });
+
+    clearAllProductsBtn.addEventListener('click', async () => {
+        const confirmed = await showMessage('確定要刪除所有商品嗎？此動作無法復原。', true);
+        if (confirmed) {
+            products = [];
+            saveProductsToLocalStorage();
+            renderProductsTable();
+            showToast('所有商品已成功清空！');
         }
     });
 
